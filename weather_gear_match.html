@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather & Gear Match</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Fredoka (playful, rounded, legible) & Nunito -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti for round completion celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #fef9c3 50%, #fce7f3 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        h1, h2, h3, .font-display {
+            font-family: 'Fredoka', sans-serif;
+        }
+
+        /* Custom Animations */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px) rotate(-1.5deg); }
+            40% { transform: translateX(8px) rotate(1.5deg); }
+            60% { transform: translateX(-6px) rotate(-1deg); }
+            80% { transform: translateX(6px) rotate(1deg); }
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.85); opacity: 0; }
+            70% { transform: scale(1.04); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes pulseRing {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            70% { transform: scale(1.25); opacity: 0; }
+            100% { transform: scale(1.25); opacity: 0; }
+        }
+
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-5px); }
+        }
+
+        .animate-shake {
+            animation: shake 0.45s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        .animate-pop {
+            animation: popIn 0.35s ease-out forwards;
+        }
+
+        .animate-float {
+            animation: floatSlow 3s ease-in-out infinite;
+        }
+
+        .speaking-pulse::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 9999px;
+            border: 3px solid currentColor;
+            animation: pulseRing 1s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+        }
+
+        /* Card Styles */
+        .game-card {
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+            touch-action: manipulation;
+        }
+
+        .game-card:hover:not(.matched) {
+            transform: translateY(-3px) scale(1.015);
+        }
+
+        .game-card:active:not(.matched) {
+            transform: scale(0.98);
+        }
+
+        .weather-card {
+            background: linear-gradient(145deg, #ffffff, #f0f9ff);
+            border: 3px solid #bae6fd;
+            box-shadow: 0 6px 0 #7dd3fc, 0 10px 18px rgba(14, 165, 233, 0.12);
+        }
+
+        .weather-card.selected {
+            background: linear-gradient(145deg, #e0f2fe, #bae6fd);
+            border-color: #0284c7;
+            box-shadow: 0 6px 0 #0284c7, 0 12px 24px rgba(2, 132, 199, 0.28);
+            transform: translateY(-4px) scale(1.02);
+        }
+
+        .item-card {
+            background: linear-gradient(145deg, #ffffff, #fffbeb);
+            border: 3px solid #fde68a;
+            box-shadow: 0 6px 0 #fcd34d, 0 10px 18px rgba(245, 158, 11, 0.12);
+        }
+
+        .item-card.selected {
+            background: linear-gradient(145deg, #fef3c7, #fde68a);
+            border-color: #d97706;
+            box-shadow: 0 6px 0 #d97706, 0 12px 24px rgba(217, 119, 6, 0.28);
+            transform: translateY(-4px) scale(1.02);
+        }
+
+        .game-card.matched {
+            background: linear-gradient(145deg, #dcfce7, #bbf7d0);
+            border-color: #22c55e;
+            box-shadow: 0 4px 0 #16a34a;
+            opacity: 0.88;
+            cursor: default;
+        }
+
+        .game-card.error {
+            background: linear-gradient(145deg, #fee2e2, #fecaca) !important;
+            border-color: #ef4444 !important;
+            box-shadow: 0 6px 0 #dc2626 !important;
+        }
+
+        /* Connecting Lines SVG Overlay */
+        #lines-canvas {
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        /* Bubbly 3D Buttons */
+        .btn-bubbly {
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .btn-bubbly:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 rgba(0,0,0,0.2) !important;
+        }
+    </style>
+</head>
+<body class="text-slate-800 flex flex-col justify-between">
+
+    <!-- Top Header & Control Bar -->
+    <header class="w-full max-w-6xl mx-auto px-3 sm:px-6 pt-4 pb-2">
+        <div class="bg-white/90 backdrop-blur-md rounded-3xl p-3 sm:p-4 shadow-lg border-2 border-sky-200 flex flex-col lg:flex-row items-center justify-between gap-3">
+            
+            <!-- Brand & Title -->
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-sky-400 to-indigo-500 flex items-center justify-center shadow-md text-white shrink-0 animate-float">
+                    <!-- Sun & Cloud Logo SVG -->
+                    <svg class="w-8 h-8 sm:w-9 sm:h-9" viewBox="0 0 64 64" fill="none">
+                        <circle cx="26" cy="24" r="12" fill="#FACC15"/>
+                        <path d="M26 6V10M26 38V42M8 24H12M40 24H44M13.3 11.3L16.1 14.1M35.9 33.9L38.7 36.7M38.7 11.3L35.9 14.1M16.1 33.9L13.3 36.7" stroke="#FACC15" stroke-width="4" stroke-linecap="round"/>
+                        <path d="M24 48H48C53.5228 48 58 43.5228 58 38C58 32.8168 54.0571 28.5542 49.006 28.0508C47.4191 21.1583 41.2484 16 33.8571 16C25.2584 16 18.2857 22.9727 18.2857 31.5714C18.2857 32.0672 18.3089 32.5576 18.3542 33.0414C14.7495 34.4329 12.1905 37.9234 12.1905 42.0119C12.1905 45.319 14.8715 48 18.1786 48H24Z" fill="#FFFFFF" stroke="#38BDF8" stroke-width="3"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-sky-600 via-indigo-600 to-amber-500 bg-clip-text text-transparent leading-tight">
+                        Weather &amp; Gear Match
+                    </h1>
+                    <p class="text-xs sm:text-sm text-slate-500 font-semibold">Listen, learn &amp; match what to wear or bring!</p>
+                </div>
+            </div>
+
+            <!-- Controls & Mode Switcher -->
+            <div class="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+                
+                <!-- Mode Switcher (Play vs Study) -->
+                <div class="bg-slate-100 p-1 rounded-2xl flex items-center border border-slate-200">
+                    <button id="btn-mode-play" onclick="switchMode('play')" class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-semibold text-sm sm:text-base transition-all bg-sky-500 text-white shadow-sm flex items-center gap-1.5">
+                        <span>🎮</span> Play Match
+                    </button>
+                    <button id="btn-mode-study" onclick="switchMode('study')" class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-semibold text-sm sm:text-base transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+                        <span>📖</span> Study Cards
+                    </button>
+                </div>
+
+                <!-- Speech Speed Toggle -->
+                <button id="btn-speed" onclick="toggleSpeed()" title="Toggle Voice Speed" class="btn-bubbly px-3 py-2 rounded-2xl bg-indigo-100 hover:bg-indigo-200 text-indigo-800 border-2 border-indigo-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-[0_3px_0_#a5b4fc]">
+                    <span id="speed-icon">🐇</span>
+                    <span id="speed-label">Normal</span>
+                </button>
+
+                <!-- Sound Effects & Voice Mute Toggle -->
+                <button id="btn-mute" onclick="toggleMute()" title="Mute or Unmute Audio" class="btn-bubbly px-3 py-2 rounded-2xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border-2 border-emerald-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-[0_3px_0_#6ee7b7]">
+                    <span id="mute-icon">🔊</span>
+                    <span id="mute-label" class="hidden sm:inline">Sound On</span>
+                </button>
+
+                <!-- New Round / Shuffle Button -->
+                <button id="btn-new-round" onclick="startNewRound()" class="btn-bubbly px-3.5 py-2 rounded-2xl bg-amber-400 hover:bg-amber-500 text-amber-950 border-2 border-amber-500 font-display font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-[0_3px_0_#d97706]">
+                    <span>🔀</span> New Round
+                </button>
+            </div>
+        </div>
+
+        <!-- Scoreboard & Progress Bar (Visible in Play Mode) -->
+        <div id="scoreboard-bar" class="mt-3 bg-white/85 backdrop-blur-sm rounded-2xl px-4 py-2.5 shadow-sm border border-sky-100 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-4 sm:gap-6">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xl">⭐</span>
+                    <div>
+                        <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">Score</div>
+                        <div id="score-display" class="font-display font-bold text-lg sm:text-xl text-amber-600 leading-none">0</div>
+                    </div>
+                </div>
+                <div class="h-7 w-0.5 bg-slate-200 rounded-full"></div>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xl">🔥</span>
+                    <div>
+                        <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">Streak</div>
+                        <div id="streak-display" class="font-display font-bold text-lg sm:text-xl text-orange-500 leading-none">0</div>
+                    </div>
+                </div>
+                <div class="h-7 w-0.5 bg-slate-200 rounded-full"></div>
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xl">🏆</span>
+                    <div>
+                        <div class="text-[11px] uppercase tracking-wider font-extrabold text-slate-400">Round</div>
+                        <div id="round-display" class="font-display font-bold text-lg sm:text-xl text-sky-600 leading-none">1</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Feedback Banner -->
+            <div id="feedback-banner" class="flex-1 text-center font-display font-semibold text-sm sm:text-base text-sky-700 bg-sky-50 px-3 py-1.5 rounded-xl border border-sky-200 transition-all">
+                Tap a Weather card and its matching Gear card!
+            </div>
+
+            <!-- Round Progress Bar -->
+            <div class="w-full sm:w-44 flex items-center gap-2">
+                <div class="flex-1 h-3.5 bg-slate-200 rounded-full overflow-hidden p-0.5 shadow-inner">
+                    <div id="progress-bar" class="h-full bg-gradient-to-r from-emerald-400 to-green-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <span id="progress-text" class="font-display font-bold text-xs sm:text-sm text-slate-600 whitespace-nowrap">0 / 5</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN GAMEPLAY AREA (PLAY MODE) -->
+    <main id="play-view" class="w-full max-w-6xl mx-auto px-3 sm:px-6 py-2 flex-1 flex flex-col justify-center relative">
+        
+        <!-- Relative Container for Cards + SVG Connecting Lines -->
+        <div id="board-container" class="relative w-full">
+            <!-- SVG Overlay for Match Connection Lines -->
+            <svg id="lines-canvas" class="absolute inset-0 w-full h-full"></svg>
+
+            <!-- Two-Column Responsive Grid -->
+            <div class="grid grid-cols-2 gap-4 sm:gap-10 md:gap-16 items-stretch relative z-10">
+                
+                <!-- LEFT COLUMN: WEATHER -->
+                <div class="flex flex-col">
+                    <div class="flex items-center justify-center gap-2 mb-2.5 bg-sky-500 text-white py-1.5 px-4 rounded-2xl shadow-sm self-center">
+                        <span class="text-lg">🌤️</span>
+                        <h2 class="font-display font-bold text-base sm:text-lg tracking-wide">THE WEATHER</h2>
+                    </div>
+                    <div id="weather-column" class="flex flex-col gap-3 sm:gap-3.5">
+                        <!-- Weather cards injected via JS -->
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: ITEMS / GEAR -->
+                <div class="flex flex-col">
+                    <div class="flex items-center justify-center gap-2 mb-2.5 bg-amber-500 text-white py-1.5 px-4 rounded-2xl shadow-sm self-center">
+                        <span class="text-lg">🎒</span>
+                        <h2 class="font-display font-bold text-base sm:text-lg tracking-wide">WHAT YOU NEED</h2>
+                    </div>
+                    <div id="items-column" class="flex flex-col gap-3 sm:gap-3.5">
+                        <!-- Item cards injected via JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Round Complete Celebration Modal Overlay -->
+        <div id="round-complete-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 text-center shadow-2xl border-4 border-amber-300 animate-pop relative overflow-hidden">
+                <div class="text-5xl sm:text-6xl mb-3">🎉🌟🎉</div>
+                <h2 class="font-display font-bold text-2xl sm:text-3xl text-slate-800 mb-1">Awesome Job!</h2>
+                <p id="modal-subtitle" class="text-slate-600 font-semibold text-base sm:text-lg mb-5">You matched all the weather and gear!</p>
+                
+                <div class="bg-amber-50 rounded-2xl p-4 mb-6 border-2 border-amber-200 flex justify-around">
+                    <div>
+                        <div class="text-xs font-extrabold uppercase text-amber-700">Total Score</div>
+                        <div id="modal-score" class="font-display font-bold text-2xl text-amber-600">500</div>
+                    </div>
+                    <div class="w-0.5 bg-amber-200"></div>
+                    <div>
+                        <div class="text-xs font-extrabold uppercase text-orange-700">Best Streak</div>
+                        <div id="modal-streak" class="font-display font-bold text-2xl text-orange-500">5</div>
+                    </div>
+                </div>
+
+                <button onclick="startNewRound()" class="btn-bubbly w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 to-green-500 hover:from-emerald-500 hover:to-green-600 text-white font-display font-bold text-xl shadow-[0_5px_0_#15803d] flex items-center justify-center gap-2">
+                    <span>▶️</span> Play Next Round
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- STUDY / FLASHCARD MODE VIEW -->
+    <section id="study-view" class="hidden w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 flex-1 flex flex-col items-center justify-center">
+        <div class="w-full bg-white/95 rounded-3xl p-5 sm:p-8 shadow-xl border-4 border-indigo-200 flex flex-col items-center">
+            
+            <!-- Flashcard Top Header -->
+            <div class="w-full flex items-center justify-between mb-4">
+                <span class="bg-indigo-100 text-indigo-800 font-display font-bold px-3.5 py-1 rounded-full text-sm">
+                    📖 Vocabulary Study Mode
+                </span>
+                <span id="study-counter" class="font-display font-bold text-slate-500 text-base">
+                    Card 1 of 10
+                </span>
+            </div>
+
+            <!-- Paired Weather + Item Flashcard Display -->
+            <div id="study-card-content" class="w-full grid grid-cols-1 md:grid-cols-2 gap-5 my-2">
+                <!-- Left: Weather Card -->
+                <div onclick="speakStudyWeather()" class="cursor-pointer rounded-3xl bg-gradient-to-br from-sky-50 to-sky-100 border-4 border-sky-300 p-6 flex flex-col items-center text-center shadow-md hover:scale-[1.02] transition-transform">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-sky-600 bg-white px-3 py-1 rounded-full mb-3 shadow-xs">Weather</span>
+                    <div id="study-weather-svg" class="w-28 h-28 sm:w-32 sm:h-32 mb-3 flex items-center justify-center"></div>
+                    <h3 id="study-weather-name" class="font-display font-bold text-3xl text-slate-800 mb-2">Rainy</h3>
+                    <button type="button" class="mt-1 px-4 py-2 rounded-full bg-sky-500 text-white font-bold text-sm flex items-center gap-2 shadow-sm hover:bg-sky-600">
+                        <span>🔊</span> Listen: Weather
+                    </button>
+                </div>
+
+                <!-- Right: Item Card -->
+                <div onclick="speakStudyItem()" class="cursor-pointer rounded-3xl bg-gradient-to-br from-amber-50 to-amber-100 border-4 border-amber-300 p-6 flex flex-col items-center text-center shadow-md hover:scale-[1.02] transition-transform">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-amber-600 bg-white px-3 py-1 rounded-full mb-3 shadow-xs">Essential Gear</span>
+                    <div id="study-item-svg" class="w-28 h-28 sm:w-32 sm:h-32 mb-3 flex items-center justify-center"></div>
+                    <h3 id="study-item-name" class="font-display font-bold text-3xl text-slate-800 mb-2">Umbrella</h3>
+                    <button type="button" class="mt-1 px-4 py-2 rounded-full bg-amber-500 text-white font-bold text-sm flex items-center gap-2 shadow-sm hover:bg-amber-600">
+                        <span>🔊</span> Listen: Gear
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sentence Example & Speak Both Button -->
+            <div class="w-full mt-4 bg-indigo-50 rounded-2xl p-4 border-2 border-indigo-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <p id="study-sentence" class="font-display font-semibold text-lg text-indigo-950 text-center sm:text-left">
+                    "When it is <span class="text-sky-600 underline">Rainy</span>, you need an <span class="text-amber-600 underline">Umbrella</span>!"
+                </p>
+                <button onclick="speakStudySentence()" class="btn-bubbly shrink-0 px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-display font-bold text-base shadow-[0_4px_0_#3730a3] flex items-center gap-2">
+                    <span>🗣️</span> Say Together
+                </button>
+            </div>
+
+            <!-- Navigation Controls -->
+            <div class="w-full flex items-center justify-between mt-6 gap-4">
+                <button onclick="prevStudyCard()" class="btn-bubbly px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-display font-bold text-base sm:text-lg shadow-[0_4px_0_#94a3b8]">
+                    ⬅️ Previous
+                </button>
+                <button onclick="switchMode('play')" class="btn-bubbly px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-display font-bold text-base sm:text-lg shadow-[0_4px_0_#15803d]">
+                    🎮 Ready to Play!
+                </button>
+                <button onclick="nextStudyCard()" class="btn-bubbly px-5 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-display font-bold text-base sm:text-lg shadow-[0_4px_0_#94a3b8]">
+                    Next ➡️
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer Tip -->
+    <footer class="w-full text-center py-2.5 px-4 text-xs sm:text-sm text-slate-500 font-semibold">
+        Tip: Click any card or speaker icon 🔊 to hear how each word is pronounced!
+    </footer>
+
+    <!-- JAVASCRIPT GAME ENGINE & CUSTOM SVG ILLUSTRATIONS -->
+    <script>
+        /**
+         * 1. RICH VOCABULARY POOL (10 Weather & Gear Pairs with Vibrant Custom SVGs)
+         */
+        const WEATHER_PAIRS = [
+            {
+                id: 'rainy',
+                weather: 'Rainy',
+                item: 'Umbrella',
+                phrase: 'Rainy and Umbrella!',
+                sentence: 'When it is Rainy, bring an Umbrella!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M22 44H58C64.6 44 70 38.6 70 32C70 25.8 65.3 20.7 59.2 20.1C57.3 11.8 49.9 5.6 41 5.6C30.7 5.6 22.3 14 22.3 24.3C22.3 24.9 22.3 25.5 22.4 26.1C18.1 27.8 15 31.9 15 36.8C15 40.8 18.2 44 22.2 44H22Z" fill="#60A5FA" stroke="#2563EB" stroke-width="3"/>
+                        <path d="M26 52L22 64M40 52L36 66M54 52L50 64" stroke="#0284C7" stroke-width="4" stroke-linecap="round"/>
+                        <circle cx="20" cy="70" r="2.5" fill="#0284C7"/>
+                        <circle cx="34" cy="72" r="2.5" fill="#0284C7"/>
+                        <circle cx="48" cy="70" r="2.5" fill="#0284C7"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M40 12V60C40 65.5 35.5 70 30 70C25.5 70 22 66.5 22 62" fill="none" stroke="#92400E" stroke-width="4.5" stroke-linecap="round"/>
+                        <path d="M12 40C12 23.4 24.5 12 40 12C55.5 12 68 23.4 68 40C60 36 52 36 46 40C42 36 38 36 34 40C28 36 20 36 12 40Z" fill="#F43F5E" stroke="#BE123C" stroke-width="3" stroke-linejoin="round"/>
+                        <path d="M40 12C33 20 31 30 34 40M40 12C47 20 49 30 46 40" fill="none" stroke="#FDA4AF" stroke-width="2.5"/>
+                        <circle cx="40" cy="9" r="3" fill="#BE123C"/>
+                    </svg>`
+            },
+            {
+                id: 'sunny',
+                weather: 'Sunny',
+                item: 'Sunglasses',
+                phrase: 'Sunny and Sunglasses!',
+                sentence: 'When it is Sunny, wear Sunglasses!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <circle cx="40" cy="40" r="18" fill="#FACC15" stroke="#EA580C" stroke-width="3"/>
+                        <g stroke="#F59E0B" stroke-width="4.5" stroke-linecap="round">
+                            <line x1="40" y1="8" x2="40" y2="15"/>
+                            <line x1="40" y1="65" x2="40" y2="72"/>
+                            <line x1="8" y1="40" x2="15" y2="40"/>
+                            <line x1="65" y1="40" x2="72" y2="40"/>
+                            <line x1="17.4" y1="17.4" x2="22.3" y2="22.3"/>
+                            <line x1="57.7" y1="57.7" x2="62.6" y2="62.6"/>
+                            <line x1="62.6" y1="17.4" x2="57.7" y2="22.3"/>
+                            <line x1="22.3" y1="57.7" x2="17.4" y2="62.6"/>
+                        </g>
+                        <circle cx="34" cy="36" r="2.2" fill="#78350F"/>
+                        <circle cx="46" cy="36" r="2.2" fill="#78350F"/>
+                        <path d="M35 44C37 47 43 47 45 44" fill="none" stroke="#78350F" stroke-width="2.5" stroke-linecap="round"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M12 34H68" stroke="#1E293B" stroke-width="4" stroke-linecap="round"/>
+                        <rect x="10" y="32" width="26" height="20" rx="8" fill="#0F172A" stroke="#F97316" stroke-width="3.5"/>
+                        <rect x="44" y="32" width="26" height="20" rx="8" fill="#0F172A" stroke="#F97316" stroke-width="3.5"/>
+                        <path d="M36 37C38 35 42 35 44 37" fill="none" stroke="#F97316" stroke-width="3.5"/>
+                        <line x1="16" y1="37" x2="23" y2="46" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round"/>
+                        <line x1="50" y1="37" x2="57" y2="46" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round"/>
+                    </svg>`
+            },
+            {
+                id: 'snowy',
+                weather: 'Snowy',
+                item: 'Winter Coat',
+                phrase: 'Snowy and Winter Coat!',
+                sentence: 'When it is Snowy, wear a warm Winter Coat!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M22 42H58C64.6 42 70 36.6 70 30C70 23.8 65.3 18.7 59.2 18.1C57.3 9.8 49.9 3.6 41 3.6C30.7 3.6 22.3 12 22.3 22.3C22.3 22.9 22.3 23.5 22.4 24.1C18.1 25.8 15 29.9 15 34.8C15 38.8 18.2 42 22.2 42H22Z" fill="#E0F2FE" stroke="#38BDF8" stroke-width="3"/>
+                        <g stroke="#0284C7" stroke-width="2.5" stroke-linecap="round">
+                            <path d="M26 52V62M21 57H31M22.5 53.5L29.5 60.5M29.5 53.5L22.5 60.5"/>
+                            <path d="M54 52V62M49 57H59M50.5 53.5L57.5 60.5M57.5 53.5L50.5 60.5"/>
+                            <path d="M40 60V70M35 65H45M36.5 61.5L43.5 68.5M43.5 61.5L36.5 68.5"/>
+                        </g>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M26 18L12 34L20 42L26 35V66H54V35L60 42L68 34L54 18H46C44 23 36 23 34 18H26Z" fill="#EF4444" stroke="#991B1B" stroke-width="3" stroke-linejoin="round"/>
+                        <path d="M32 16C34 22 46 22 48 16" fill="none" stroke="#FDE047" stroke-width="4" stroke-linecap="round"/>
+                        <line x1="40" y1="22" x2="40" y2="66" stroke="#991B1B" stroke-width="2.5"/>
+                        <circle cx="40" cy="32" r="2.5" fill="#FDE047"/>
+                        <circle cx="40" cy="44" r="2.5" fill="#FDE047"/>
+                        <circle cx="40" cy="56" r="2.5" fill="#FDE047"/>
+                    </svg>`
+            },
+            {
+                id: 'windy',
+                weather: 'Windy',
+                item: 'Kite',
+                phrase: 'Windy and Kite!',
+                sentence: 'When it is Windy, fly a colorful Kite!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M12 28H54C60 28 64 24 64 19C64 14 60 11 55 11C51 11 48 14 48 18" fill="none" stroke="#38BDF8" stroke-width="4.5" stroke-linecap="round"/>
+                        <path d="M8 42H62C68 42 72 46 72 51C72 56 68 59 63 59C59 59 56 56 56 52" fill="none" stroke="#0EA5E9" stroke-width="4.5" stroke-linecap="round"/>
+                        <path d="M18 56H44" fill="none" stroke="#7DD3FC" stroke-width="4.5" stroke-linecap="round"/>
+                        <path d="M62 32C65 30 69 32 67 35C65 37 61 35 62 32Z" fill="#4ADE80"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <polygon points="40,10 62,32 40,56 18,32" fill="#A855F7" stroke="#6B21A8" stroke-width="3" stroke-linejoin="round"/>
+                        <polygon points="40,10 62,32 40,32" fill="#FACC15"/>
+                        <polygon points="40,32 18,32 40,56" fill="#38BDF8"/>
+                        <line x1="40" y1="10" x2="40" y2="56" stroke="#6B21A8" stroke-width="2.5"/>
+                        <line x1="18" y1="32" x2="62" y2="32" stroke="#6B21A8" stroke-width="2.5"/>
+                        <path d="M40 56C36 62 46 66 38 73" fill="none" stroke="#EC4899" stroke-width="3" stroke-linecap="round"/>
+                    </svg>`
+            },
+            {
+                id: 'freezing',
+                weather: 'Freezing',
+                item: 'Beanie & Gloves',
+                phrase: 'Freezing and Beanie and Gloves!',
+                sentence: 'When it is Freezing, wear a Beanie and Gloves!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <rect x="33" y="12" width="14" height="44" rx="7" fill="#E0F2FE" stroke="#0284C7" stroke-width="3"/>
+                        <circle cx="40" cy="58" r="12" fill="#38BDF8" stroke="#0284C7" stroke-width="3"/>
+                        <rect x="37" y="34" width="6" height="22" rx="3" fill="#0284C7"/>
+                        <circle cx="40" cy="58" r="6" fill="#0284C7"/>
+                        <path d="M54 22V32M49 27H59M51 24L57 30M57 24L51 30" stroke="#0EA5E9" stroke-width="2.5" stroke-linecap="round"/>
+                        <path d="M22 30V40M17 35H27M19 32L25 38M25 32L19 38" stroke="#0EA5E9" stroke-width="2.5" stroke-linecap="round"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <!-- Beanie -->
+                        <circle cx="40" cy="12" r="6" fill="#FACC15" stroke="#CA8A04" stroke-width="2.5"/>
+                        <path d="M20 36C20 23 29 16 40 16C51 16 60 23 60 36H20Z" fill="#3B82F6" stroke="#1D4ED8" stroke-width="3"/>
+                        <rect x="18" y="34" width="44" height="9" rx="4" fill="#93C5FD" stroke="#1D4ED8" stroke-width="3"/>
+                        <!-- Mittens -->
+                        <rect x="16" y="49" width="18" height="22" rx="9" fill="#F43F5E" stroke="#BE123C" stroke-width="2.5"/>
+                        <rect x="46" y="49" width="18" height="22" rx="9" fill="#F43F5E" stroke="#BE123C" stroke-width="2.5"/>
+                    </svg>`
+            },
+            {
+                id: 'hot',
+                weather: 'Hot',
+                item: 'Sun Hat & Water',
+                phrase: 'Hot and Sun Hat and Water!',
+                sentence: 'When it is Hot, wear a Sun Hat and drink Water!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <circle cx="34" cy="34" r="16" fill="#FB923C" stroke="#EA580C" stroke-width="3"/>
+                        <path d="M34 10V14M34 54V58M10 34H14M54 34H58M17 17L20 20M48 48L51 51M51 17L48 20M20 48L17 51" stroke="#EA580C" stroke-width="4" stroke-linecap="round"/>
+                        <rect x="56" y="20" width="10" height="36" rx="5" fill="#FEE2E2" stroke="#DC2626" stroke-width="2.5"/>
+                        <circle cx="61" cy="58" r="9" fill="#EF4444" stroke="#DC2626" stroke-width="2.5"/>
+                        <rect x="59" y="24" width="4" height="32" rx="2" fill="#EF4444"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <!-- Sun Hat -->
+                        <path d="M22 34C22 22 29 16 38 16C47 16 54 22 54 34H22Z" fill="#FDE047" stroke="#CA8A04" stroke-width="2.5"/>
+                        <ellipse cx="38" cy="35" rx="28" ry="7" fill="#FEF08A" stroke="#CA8A04" stroke-width="2.5"/>
+                        <path d="M23 30H53" stroke="#F43F5E" stroke-width="4"/>
+                        <!-- Water Bottle -->
+                        <rect x="46" y="44" width="18" height="26" rx="4" fill="#38BDF8" stroke="#0369A1" stroke-width="2.5"/>
+                        <rect x="51" y="38" width="8" height="6" rx="1.5" fill="#0284C7"/>
+                    </svg>`
+            },
+            {
+                id: 'stormy',
+                weather: 'Stormy',
+                item: 'Flashlight',
+                phrase: 'Stormy and Flashlight!',
+                sentence: 'When it is Stormy, keep a Flashlight ready!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M22 44H58C64.6 44 70 38.6 70 32C70 25.8 65.3 20.7 59.2 20.1C57.3 11.8 49.9 5.6 41 5.6C30.7 5.6 22.3 14 22.3 24.3C22.3 24.9 22.3 25.5 22.4 26.1C18.1 27.8 15 31.9 15 36.8C15 40.8 18.2 44 22.2 44H22Z" fill="#475569" stroke="#1E293B" stroke-width="3"/>
+                        <polygon points="42,38 30,56 41,56 36,72 52,51 41,51" fill="#FACC15" stroke="#CA8A04" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <polygon points="52,24 72,14 72,44 52,34" fill="#FEF08A" opacity="0.85"/>
+                        <rect x="14" y="25" width="30" height="14" rx="4" fill="#F97316" stroke="#9A3412" stroke-width="3"/>
+                        <polygon points="44,23 54,19 54,45 44,41" fill="#64748B" stroke="#1E293B" stroke-width="3" stroke-linejoin="round"/>
+                        <rect x="25" y="29" width="8" height="5" rx="2" fill="#FACC15"/>
+                    </svg>`
+            },
+            {
+                id: 'foggy',
+                weather: 'Foggy',
+                item: 'Reflective Vest',
+                phrase: 'Foggy and Reflective Vest!',
+                sentence: 'When it is Foggy, wear a bright Reflective Vest!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M22 36H58C64 36 68 31 68 26C68 21 64 17 59 16.5C57 10 50 5 42 5C33 5 25 12 25 21C20 22 16 26 16 30C16 33.5 19 36 22 36Z" fill="#CBD5E1" stroke="#64748B" stroke-width="3"/>
+                        <line x1="12" y1="46" x2="68" y2="46" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+                        <line x1="18" y1="56" x2="62" y2="56" stroke="#CBD5E1" stroke-width="5" stroke-linecap="round"/>
+                        <line x1="14" y1="66" x2="66" y2="66" stroke="#94A3B8" stroke-width="5" stroke-linecap="round"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M24 14L16 28V66H64V28L56 14H46C44 22 36 22 34 14H24Z" fill="#A3E635" stroke="#4D7C0F" stroke-width="3" stroke-linejoin="round"/>
+                        <rect x="16" y="42" width="48" height="7" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5"/>
+                        <rect x="16" y="54" width="48" height="7" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5"/>
+                        <rect x="25" y="14" width="6" height="28" fill="#F8FAFC"/>
+                        <rect x="49" y="14" width="6" height="28" fill="#F8FAFC"/>
+                    </svg>`
+            },
+            {
+                id: 'puddles',
+                weather: 'Drizzly',
+                item: 'Rain Boots',
+                phrase: 'Drizzly and Rain Boots!',
+                sentence: 'When it is Drizzly, put on waterproof Rain Boots!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <path d="M24 38H56C62 38 66 33 66 28C66 23 62 19 57 18.5C55 12 48 7 40 7C31 7 24 14 24 23C19 24 16 28 16 32C16 35.5 19 38 24 38Z" fill="#93C5FD" stroke="#3B82F6" stroke-width="3"/>
+                        <path d="M28 46L26 52M40 48L38 54M52 46L50 52" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round"/>
+                        <ellipse cx="40" cy="66" rx="24" ry="5" fill="#BAE6FD" stroke="#0284C7" stroke-width="2.5"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <!-- Left Boot -->
+                        <path d="M16 18H32V52H40C43 52 45 55 45 59V64H16V18Z" fill="#FACC15" stroke="#A16207" stroke-width="3" stroke-linejoin="round"/>
+                        <rect x="16" y="22" width="16" height="5" fill="#EF4444"/>
+                        <!-- Right Boot -->
+                        <path d="M44 22H58V54H65C68 54 70 57 70 61V66H44V22Z" fill="#FACC15" stroke="#A16207" stroke-width="3" stroke-linejoin="round"/>
+                        <rect x="44" y="26" width="14" height="5" fill="#EF4444"/>
+                    </svg>`
+            },
+            {
+                id: 'breezy',
+                weather: 'Chilly',
+                item: 'Cozy Scarf',
+                phrase: 'Chilly and Cozy Scarf!',
+                sentence: 'When it is Chilly, wrap up in a Cozy Scarf!',
+                weatherSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <circle cx="28" cy="26" r="12" fill="#FDE047" stroke="#EAB308" stroke-width="2.5"/>
+                        <path d="M28 46H60C65 46 69 42 69 37C69 32 65 28 60 27.5C58 21 52 17 45 17C37 17 31 23 31 31C26 32 23 35 23 39C23 43 25 46 28 46Z" fill="#FFFFFF" stroke="#60A5FA" stroke-width="3"/>
+                        <path d="M18 58C26 54 34 62 42 58C50 54 58 62 66 58" fill="none" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
+                    </svg>`,
+                itemSvg: `
+                    <svg viewBox="0 0 80 80" class="w-full h-full">
+                        <rect x="20" y="20" width="40" height="16" rx="8" fill="#10B981" stroke="#047857" stroke-width="3"/>
+                        <path d="M26 36V64H38V36" fill="#10B981" stroke="#047857" stroke-width="3" stroke-linejoin="round"/>
+                        <path d="M44 36V58H56V36" fill="#34D399" stroke="#047857" stroke-width="3" stroke-linejoin="round"/>
+                        <line x1="26" y1="46" x2="38" y2="46" stroke="#FACC15" stroke-width="4"/>
+                        <line x1="44" y1="46" x2="56" y2="46" stroke="#FACC15" stroke-width="4"/>
+                        <line x1="28" y1="64" x2="28" y2="70" stroke="#047857" stroke-width="2.5"/>
+                        <line x1="32" y1="64" x2="32" y2="70" stroke="#047857" stroke-width="2.5"/>
+                        <line x1="36" y1="64" x2="36" y2="70" stroke="#047857" stroke-width="2.5"/>
+                    </svg>`
+            }
+        ];
+
+        /**
+         * 2. APPLICATION STATE
+         */
+        const PAIRS_PER_ROUND = 5;
+        let currentRoundPairs = [];
+        let shuffledWeather = [];
+        let shuffledItems = [];
+
+        let selectedWeatherId = null;
+        let selectedItemId = null;
+        let matchedIds = new Set();
+
+        let score = 0;
+        let streak = 0;
+        let bestStreak = 0;
+        let roundNumber = 0;
+
+        let isSlowSpeech = false;
+        let isMuted = false;
+        let currentMode = 'play'; // 'play' or 'study'
+        let studyIndex = 0;
+
+        // Web Audio API Context for synthesized sound effects (no external files)
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        /**
+         * 3. SYNTHESIZED SOUND EFFECTS (Web Audio API)
+         */
+        function playSoundEffect(type) {
+            if (isMuted) return;
+            const ctx = getAudioContext();
+            if (!ctx) return;
+
+            const now = ctx.currentTime;
+
+            if (type === 'select') {
+                // Soft friendly pop
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(660, now + 0.09);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'match') {
+                // Happy ascending major triad arpeggio
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    const startTime = now + idx * 0.075;
+                    osc.frequency.setValueAtTime(freq, startTime);
+                    gain.gain.setValueAtTime(0.2, startTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.3);
+                });
+            } else if (type === 'error') {
+                // Gentle low boing/buzz
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(190, now);
+                osc.frequency.linearRampToValueAtTime(135, now + 0.25);
+                gain.gain.setValueAtTime(0.14, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.28);
+            } else if (type === 'win') {
+                // Fanfare chord
+                const fanfare = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+                const times = [0, 0.1, 0.2, 0.32, 0.48, 0.62];
+                fanfare.forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    const t = now + times[i];
+                    osc.frequency.setValueAtTime(freq, t);
+                    gain.gain.setValueAtTime(0.22, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.35);
+                });
+            }
+        }
+
+        /**
+         * 4. TEXT-TO-SPEECH PRONUNCIATION (Web Speech API)
+         */
+        let preferredVoice = null;
+
+        function loadVoices() {
+            if (!('speechSynthesis' in window)) return;
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                // Prefer clear English voices (US/UK natural voices)
+                preferredVoice =
+                    voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Natural'))) ||
+                    voices.find(v => v.lang.startsWith('en-US')) ||
+                    voices.find(v => v.lang.startsWith('en')) ||
+                    voices[0];
+            }
+        }
+
+        if ('speechSynthesis' in window) {
+            loadVoices();
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        function speakText(text, triggerButtonEl = null) {
+            if (isMuted || !('speechSynthesis' in window)) return;
+
+            try {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
+                }
+                utterance.lang = 'en-US';
+                utterance.rate = isSlowSpeech ? 0.68 : 0.96;
+                utterance.pitch = 1.08; // Slightly bright, friendly tone
+
+                if (triggerButtonEl) {
+                    triggerButtonEl.classList.add('speaking-pulse');
+                    utterance.onend = () => triggerButtonEl.classList.remove('speaking-pulse');
+                    utterance.onerror = () => triggerButtonEl.classList.remove('speaking-pulse');
+                }
+
+                window.speechSynthesis.speak(utterance);
+            } catch (err) {
+                console.warn('Speech synthesis error:', err);
+            }
+        }
+
+        /**
+         * 5. UTILITY & SHUFFLE HELPERS
+         */
+        function shuffleArray(array) {
+            const copy = [...array];
+            for (let i = copy.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [copy[i], copy[j]] = [copy[j], copy[i]];
+            }
+            return copy;
+        }
+
+        /**
+         * 6. GAME INITIALIZATION & ROUND MANAGEMENT
+         */
+        function startNewRound() {
+            document.getElementById('round-complete-modal').classList.add('hidden');
+            roundNumber++;
+            selectedWeatherId = null;
+            selectedItemId = null;
+            matchedIds.clear();
+
+            // Pick a randomized subset of PAIRS_PER_ROUND from our 10-pair pool
+            currentRoundPairs = shuffleArray(WEATHER_PAIRS).slice(0, PAIRS_PER_ROUND);
+            shuffledWeather = shuffleArray(currentRoundPairs);
+            shuffledItems = shuffleArray(currentRoundPairs);
+
+            updateScoreboard();
+            setFeedback('Tap a Weather card and its matching Gear card!', 'neutral');
+            renderGameBoard();
+        }
+
+        function renderGameBoard() {
+            const weatherCol = document.getElementById('weather-column');
+            const itemsCol = document.getElementById('items-column');
+
+            weatherCol.innerHTML = '';
+            itemsCol.innerHTML = '';
+
+            // Render Left Column (Weather)
+            shuffledWeather.forEach((pair, index) => {
+                const card = document.createElement('div');
+                card.id = `weather-card-${pair.id}`;
+                card.dataset.id = pair.id;
+                card.style.animationDelay = `${index * 60}ms`;
+                card.className = 'game-card weather-card animate-pop rounded-2xl sm:rounded-3xl p-2.5 sm:p-3.5 flex items-center justify-between gap-2 sm:gap-3 cursor-pointer relative';
+                
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                        <div class="w-12 h-12 sm:w-16 sm:h-16 shrink-0 bg-sky-100/80 rounded-2xl p-1.5 flex items-center justify-center border border-sky-200">
+                            ${pair.weatherSvg}
+                        </div>
+                        <span class="font-display font-bold text-base sm:text-xl md:text-2xl text-slate-800 truncate">
+                            ${pair.weather}
+                        </span>
+                    </div>
+                    <button type="button" aria-label="Pronounce ${pair.weather}" 
+                        class="speaker-btn relative w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-full bg-sky-500 hover:bg-sky-600 text-white flex items-center justify-center shadow-sm transition-transform active:scale-90">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                    </button>
+                `;
+
+                // Speaker button click: pronounce only without changing selection if desired, or select + speak
+                const speakerBtn = card.querySelector('.speaker-btn');
+                speakerBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    speakText(pair.weather, speakerBtn);
+                });
+
+                // Card click: select & pronounce
+                card.addEventListener('click', () => handleWeatherSelect(pair, speakerBtn));
+
+                weatherCol.appendChild(card);
+            });
+
+            // Render Right Column (Items)
+            shuffledItems.forEach((pair, index) => {
+                const card = document.createElement('div');
+                card.id = `item-card-${pair.id}`;
+                card.dataset.id = pair.id;
+                card.style.animationDelay = `${index * 60}ms`;
+                card.className = 'game-card item-card animate-pop rounded-2xl sm:rounded-3xl p-2.5 sm:p-3.5 flex items-center justify-between gap-2 sm:gap-3 cursor-pointer relative';
+                
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                        <div class="w-12 h-12 sm:w-16 sm:h-16 shrink-0 bg-amber-100/80 rounded-2xl p-1.5 flex items-center justify-center border border-amber-200">
+                            ${pair.itemSvg}
+                        </div>
+                        <span class="font-display font-bold text-base sm:text-xl md:text-2xl text-slate-800 truncate">
+                            ${pair.item}
+                        </span>
+                    </div>
+                    <button type="button" aria-label="Pronounce ${pair.item}" 
+                        class="speaker-btn relative w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-full bg-amber-500 hover:bg-amber-600 text-white flex items-center justify-center shadow-sm transition-transform active:scale-90">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                    </button>
+                `;
+
+                const speakerBtn = card.querySelector('.speaker-btn');
+                speakerBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    speakText(pair.item, speakerBtn);
+                });
+
+                card.addEventListener('click', () => handleItemSelect(pair, speakerBtn));
+
+                itemsCol.appendChild(card);
+            });
+
+            // Clear connecting lines
+            requestAnimationFrame(drawMatchLines);
+        }
+
+        /**
+         * 7. INTERACTIVE SELECTION & MATCHING LOGIC
+         */
+        function handleWeatherSelect(pair, speakerBtn) {
+            if (matchedIds.has(pair.id)) return;
+
+            // Pronounce the weather word immediately
+            speakText(pair.weather, speakerBtn);
+
+            // Toggle off if clicking already selected card
+            if (selectedWeatherId === pair.id) {
+                selectedWeatherId = null;
+                updateSelectionStyles();
+                return;
+            }
+
+            playSoundEffect('select');
+            selectedWeatherId = pair.id;
+            updateSelectionStyles();
+
+            if (selectedItemId) {
+                evaluateMatch();
+            } else {
+                setFeedback(`Selected "${pair.weather}". Now pick the matching gear!`, 'info');
+            }
+        }
+
+        function handleItemSelect(pair, speakerBtn) {
+            if (matchedIds.has(pair.id)) return;
+
+            // Pronounce the item word immediately
+            speakText(pair.item, speakerBtn);
+
+            if (selectedItemId === pair.id) {
+                selectedItemId = null;
+                updateSelectionStyles();
+                return;
+            }
+
+            playSoundEffect('select');
+            selectedItemId = pair.id;
+            updateSelectionStyles();
+
+            if (selectedWeatherId) {
+                evaluateMatch();
+            } else {
+                setFeedback(`Selected "${pair.item}". Now pick the matching weather!`, 'info');
+            }
+        }
+
+        function updateSelectionStyles() {
+            document.querySelectorAll('.weather-card').forEach(el => {
+                el.classList.toggle('selected', el.dataset.id === selectedWeatherId);
+            });
+            document.querySelectorAll('.item-card').forEach(el => {
+                el.classList.toggle('selected', el.dataset.id === selectedItemId);
+            });
+        }
+
+        function evaluateMatch() {
+            const wId = selectedWeatherId;
+            const iId = selectedItemId;
+
+            const wCard = document.getElementById(`weather-card-${wId}`);
+            const iCard = document.getElementById(`item-card-${iId}`);
+
+            if (wId === iId) {
+                // CORRECT MATCH!
+                matchedIds.add(wId);
+                selectedWeatherId = null;
+                selectedItemId = null;
+
+                wCard.classList.remove('selected');
+                iCard.classList.remove('selected');
+                wCard.classList.add('matched');
+                iCard.classList.add('matched');
+
+                // Add checkmark badges
+                appendCheckmark(wCard);
+                appendCheckmark(iCard);
+
+                // Update Score & Streak
+                streak++;
+                if (streak > bestStreak) bestStreak = streak;
+                const pointsEarned = 100 + (streak - 1) * 20;
+                score += pointsEarned;
+                updateScoreboard();
+
+                const matchedPair = currentRoundPairs.find(p => p.id === wId);
+                setFeedback(`🎉 Great match! ${matchedPair.phrase} (+${pointsEarned} pts)`, 'success');
+
+                // Play celebratory chime & speak reinforcing phrase
+                playSoundEffect('match');
+                setTimeout(() => {
+                    speakText(matchedPair.phrase);
+                }, 260);
+
+                // Draw visual connecting line
+                drawMatchLines();
+
+                // Check if round is complete
+                if (matchedIds.size === currentRoundPairs.length) {
+                    setTimeout(handleRoundComplete, 900);
+                }
+
+            } else {
+                // INCORRECT MATCH
+                streak = 0;
+                updateScoreboard();
+                playSoundEffect('error');
+
+                const wPair = currentRoundPairs.find(p => p.id === wId);
+                const iPair = currentRoundPairs.find(p => p.id === iId);
+                setFeedback(`Oops! "${wPair.weather}" doesn't match "${iPair.item}". Try again!`, 'error');
+
+                wCard.classList.add('error', 'animate-shake');
+                iCard.classList.add('error', 'animate-shake');
+
+                selectedWeatherId = null;
+                selectedItemId = null;
+
+                setTimeout(() => {
+                    wCard.classList.remove('selected', 'error', 'animate-shake');
+                    iCard.classList.remove('selected', 'error', 'animate-shake');
+                }, 550);
+            }
+        }
+
+        function appendCheckmark(cardEl) {
+            if (cardEl.querySelector('.match-badge')) return;
+            const badge = document.createElement('div');
+            badge.className = 'match-badge absolute -top-2 -left-2 w-7 h-7 rounded-full bg-green-500 text-white flex items-center justify-center shadow-md border-2 border-white font-bold text-sm animate-pop';
+            badge.innerHTML = '✓';
+            cardEl.appendChild(badge);
+        }
+
+        function handleRoundComplete() {
+            playSoundEffect('win');
+            
+            // Fire celebratory confetti
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 95,
+                    spread: 75,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            document.getElementById('modal-score').textContent = score;
+            document.getElementById('modal-streak').textContent = bestStreak;
+            document.getElementById('round-complete-modal').classList.remove('hidden');
+        }
+
+        /**
+         * 8. SVG CONNECTING LINES BETWEEN MATCHED PAIRS
+         */
+        function drawMatchLines() {
+            const svg = document.getElementById('lines-canvas');
+            const container = document.getElementById('board-container');
+            if (!svg || !container) return;
+
+            const containerRect = container.getBoundingClientRect();
+            svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
+            svg.innerHTML = '';
+
+            matchedIds.forEach(id => {
+                const wCard = document.getElementById(`weather-card-${id}`);
+                const iCard = document.getElementById(`item-card-${id}`);
+                if (!wCard || !iCard) return;
+
+                const wRect = wCard.getBoundingClientRect();
+                const iRect = iCard.getBoundingClientRect();
+
+                const x1 = wRect.right - containerRect.left;
+                const y1 = wRect.top + wRect.height / 2 - containerRect.top;
+                const x2 = iRect.left - containerRect.left;
+                const y2 = iRect.top + iRect.height / 2 - containerRect.top;
+
+                const ctrlOffset = (x2 - x1) * 0.45;
+                const pathData = `M ${x1} ${y1} C ${x1 + ctrlOffset} ${y1}, ${x2 - ctrlOffset} ${y2}, ${x2} ${y2}`;
+
+                // Outer white glow stroke
+                const bgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                bgPath.setAttribute('d', pathData);
+                bgPath.setAttribute('fill', 'none');
+                bgPath.setAttribute('stroke', '#ffffff');
+                bgPath.setAttribute('stroke-width', '8');
+                bgPath.setAttribute('stroke-linecap', 'round');
+
+                // Inner vibrant green dashed/solid line
+                const fgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                fgPath.setAttribute('d', pathData);
+                fgPath.setAttribute('fill', 'none');
+                fgPath.setAttribute('stroke', '#22c55e');
+                fgPath.setAttribute('stroke-width', '4.5');
+                fgPath.setAttribute('stroke-linecap', 'round');
+
+                // Anchor dots
+                const dot1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot1.setAttribute('cx', x1);
+                dot1.setAttribute('cy', y1);
+                dot1.setAttribute('r', '5');
+                dot1.setAttribute('fill', '#16a34a');
+
+                const dot2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                dot2.setAttribute('cx', x2);
+                dot2.setAttribute('cy', y2);
+                dot2.setAttribute('r', '5');
+                dot2.setAttribute('fill', '#16a34a');
+
+                svg.appendChild(bgPath);
+                svg.appendChild(fgPath);
+                svg.appendChild(dot1);
+                svg.appendChild(dot2);
+            });
+        }
+
+        window.addEventListener('resize', drawMatchLines);
+
+        /**
+         * 9. UI UPDATES & CONTROLS (Speed, Mute, Scoreboard, Mode)
+         */
+        function updateScoreboard() {
+            document.getElementById('score-display').textContent = score;
+            document.getElementById('streak-display').textContent = streak;
+            document.getElementById('round-display').textContent = roundNumber;
+
+            const matchedCount = matchedIds.size;
+            const total = currentRoundPairs.length || PAIRS_PER_ROUND;
+            const pct = Math.round((matchedCount / total) * 100);
+
+            document.getElementById('progress-bar').style.width = `${pct}%`;
+            document.getElementById('progress-text').textContent = `${matchedCount} / ${total}`;
+        }
+
+        function setFeedback(message, status = 'neutral') {
+            const banner = document.getElementById('feedback-banner');
+            banner.textContent = message;
+            banner.className = 'flex-1 text-center font-display font-semibold text-sm sm:text-base px-3 py-1.5 rounded-xl border transition-all ';
+
+            if (status === 'success') {
+                banner.className += 'text-emerald-800 bg-emerald-100 border-emerald-300';
+            } else if (status === 'error') {
+                banner.className += 'text-rose-800 bg-rose-100 border-rose-300';
+            } else if (status === 'info') {
+                banner.className += 'text-amber-800 bg-amber-100 border-amber-300';
+            } else {
+                banner.className += 'text-sky-700 bg-sky-50 border-sky-200';
+            }
+        }
+
+        function toggleSpeed() {
+            isSlowSpeech = !isSlowSpeech;
+            const icon = document.getElementById('speed-icon');
+            const label = document.getElementById('speed-label');
+            if (isSlowSpeech) {
+                icon.textContent = '🐢';
+                label.textContent = 'Slow';
+                speakText('Slow speed');
+            } else {
+                icon.textContent = '🐇';
+                label.textContent = 'Normal';
+                speakText('Normal speed');
+            }
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const btn = document.getElementById('btn-mute');
+            const icon = document.getElementById('mute-icon');
+            const label = document.getElementById('mute-label');
+
+            if (isMuted) {
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                icon.textContent = '🔇';
+                label.textContent = 'Muted';
+                btn.classList.replace('bg-emerald-100', 'bg-slate-200');
+                btn.classList.replace('text-emerald-800', 'text-slate-600');
+                btn.classList.replace('border-emerald-300', 'border-slate-300');
+            } else {
+                icon.textContent = '🔊';
+                label.textContent = 'Sound On';
+                btn.classList.replace('bg-slate-200', 'bg-emerald-100');
+                btn.classList.replace('text-slate-600', 'text-emerald-800');
+                btn.classList.replace('border-slate-300', 'border-emerald-300');
+                playSoundEffect('select');
+            }
+        }
+
+        /**
+         * 10. STUDY / FLASHCARD MODE LOGIC
+         */
+        function switchMode(mode) {
+            currentMode = mode;
+            const playView = document.getElementById('play-view');
+            const studyView = document.getElementById('study-view');
+            const scoreboard = document.getElementById('scoreboard-bar');
+            const btnPlay = document.getElementById('btn-mode-play');
+            const btnStudy = document.getElementById('btn-mode-study');
+
+            if (mode === 'study') {
+                playView.classList.add('hidden');
+                scoreboard.classList.add('hidden');
+                studyView.classList.remove('hidden');
+
+                btnStudy.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-semibold text-sm sm:text-base transition-all bg-indigo-600 text-white shadow-sm flex items-center gap-1.5';
+                btnPlay.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-semibold text-sm sm:text-base transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5';
+
+                renderStudyCard();
+            } else {
+                studyView.classList.add('hidden');
+                playView.classList.remove('hidden');
+                scoreboard.classList.remove('hidden');
+
+                btnPlay.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-semibold text-sm sm:text-base transition-all bg-sky-500 text-white shadow-sm flex items-center gap-1.5';
+                btnStudy.className = 'px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-semibold text-sm sm:text-base transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5';
+
+                requestAnimationFrame(drawMatchLines);
+            }
+        }
+
+        function renderStudyCard() {
+            const pair = WEATHER_PAIRS[studyIndex];
+            document.getElementById('study-counter').textContent = `Card ${studyIndex + 1} of ${WEATHER_PAIRS.length}`;
+            document.getElementById('study-weather-svg').innerHTML = pair.weatherSvg;
+            document.getElementById('study-weather-name').textContent = pair.weather;
+            document.getElementById('study-item-svg').innerHTML = pair.itemSvg;
+            document.getElementById('study-item-name').textContent = pair.item;
+            document.getElementById('study-sentence').innerHTML = `"${pair.sentence}"`;
+        }
+
+        function prevStudyCard() {
+            studyIndex = (studyIndex - 1 + WEATHER_PAIRS.length) % WEATHER_PAIRS.length;
+            playSoundEffect('select');
+            renderStudyCard();
+            speakStudySentence();
+        }
+
+        function nextStudyCard() {
+            studyIndex = (studyIndex + 1) % WEATHER_PAIRS.length;
+            playSoundEffect('select');
+            renderStudyCard();
+            speakStudySentence();
+        }
+
+        function speakStudyWeather() {
+            speakText(WEATHER_PAIRS[studyIndex].weather);
+        }
+
+        function speakStudyItem() {
+            speakText(WEATHER_PAIRS[studyIndex].item);
+        }
+
+        function speakStudySentence() {
+            speakText(WEATHER_PAIRS[studyIndex].sentence);
+        }
+
+        // Start the first round on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            startNewRound();
+        });
+    </script>
+</body>
+</html>
